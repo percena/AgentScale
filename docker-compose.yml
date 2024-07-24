@@ -1,0 +1,129 @@
+services:
+  api_gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_started
+      pgvector:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - DATABASE_URL=postgresql://postgres:postgres@pgvector:5432/postgres
+    networks:
+      - app_network
+
+  rag_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m agentscale.agent_service rag
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_started
+      rag_api:
+        condition: service_started
+      pgvector:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - RAG_API_URL=http://rag_api:9000
+      - DATABASE_URL=postgresql://postgres:postgres@pgvector:5432/postgres
+    networks:
+      - app_network
+
+  rag_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    environment:
+      - SERVICE=rag_api
+      - DATABASE_URL=postgresql://postgres:postgres@pgvector:5432/postgres
+    volumes:
+      - ./src/agentscale/agents:/app/agentscale/agents
+    networks:
+      - app_network
+    command: python -m agentscale.rag.app
+
+  coding_agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m agentscale.agent_service coding
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_started
+      pgvector:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - DATABASE_URL=postgresql://postgres:postgres@pgvector:5432/postgres
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_network
+
+  consul:
+    image: "consul:1.15"
+    ports:
+      - "8500:8500"
+    command: "agent -dev -client=0.0.0.0 -log-level=info"
+    networks:
+      - app_network
+
+  pgvector:
+    image: "ankane/pgvector"
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pgvector_data:
