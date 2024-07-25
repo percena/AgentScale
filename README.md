@@ -37,13 +37,18 @@ Welcome to AgentScale, the next-generation microservices-based agent orchestrati
    cd AgentScale
    ```
 
-2. Build and run the services:
+2. Add .env file:
+   ```text
+   OPENAI_API_KEY=sk-xxx
+   ```
+
+3. Build and run the services:
 
    ```sh
    docker-compose up --build
    ```
 
-3. The API Gateway will be available at `http://localhost:8000`.
+4. The API Gateway will be available at `http://localhost:8000`.
 
 ## 💻 Usage
 
